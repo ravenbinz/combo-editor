@@ -1,17 +1,18 @@
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Document
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
-import logging
 
-# Enable logging for easier debugging
+# Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 combo_data = []
 
-# Function to start the bot
+# Start command
 def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text("Welcome to Combo Editor Bot!\nPlease upload your combo file to start editing.")
 
-# Function to handle the uploaded file and display inline buttons
+# Handle file uploads
 def handle_file(update: Update, context: CallbackContext) -> None:
     document: Document = update.message.document
 
@@ -22,7 +23,7 @@ def handle_file(update: Update, context: CallbackContext) -> None:
         global combo_data
         combo_data = content.splitlines()
 
-        # Show inline keyboard options after uploading the combo
+        # Inline keyboard with buttons for combo editing options
         keyboard = [
             [InlineKeyboardButton("Remove Captures", callback_data='remove_captures')],
             [InlineKeyboardButton("Remove URLs", callback_data='remove_urls')],
@@ -36,10 +37,10 @@ def handle_file(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text("Please upload a valid .txt file.")
 
-# Function to handle the callback queries (button clicks)
+# Handle button clicks
 def button_click(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()  # Acknowledge the button press
+    query.answer()
 
     if query.data == 'remove_captures':
         remove_captures(query, context)
@@ -48,14 +49,13 @@ def button_click(update: Update, context: CallbackContext) -> None:
     elif query.data == 'remove_duplicates':
         remove_duplicates(query, context)
 
-# Function to remove captures (text after '|')
+# Remove captures (everything after '|')
 def remove_captures(update: Update, context: CallbackContext) -> None:
     global combo_data
     if combo_data:
-        # Remove everything after '|'
         cleaned_combo = [line.split('|')[0].strip() for line in combo_data]
 
-        # Save the cleaned data
+        # Save cleaned combo to file
         with open("removed_cap.txt", "w") as f:
             f.write("\n".join(cleaned_combo))
 
@@ -64,14 +64,21 @@ def remove_captures(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text("Please upload a combo file first.")
 
-# Function to remove URLs (remove 'url:' from 'url:email:pass')
+# Remove URLs (remove 'url:' from 'url:email:pass')
 def remove_urls(update: Update, context: CallbackContext) -> None:
     global combo_data
     if combo_data:
-        # Remove URLs
-        cleaned_combo = [":".join(line.split(":")[1:]).strip() for line in combo_data if line.count(':') >= 2]
+        cleaned_combo = []
+        for line in combo_data:
+            parts = line.split(":")
+            if len(parts) >= 3:
+                # Remove the first part (URL) and join email:pass
+                cleaned_combo.append(":".join(parts[1:]).strip())
+            else:
+                # If the format is invalid, keep the original line
+                cleaned_combo.append(line)
 
-        # Save the cleaned data
+        # Save cleaned combo to file
         with open("removed_url.txt", "w") as f:
             f.write("\n".join(cleaned_combo))
 
@@ -80,14 +87,14 @@ def remove_urls(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text("Please upload a combo file first.")
 
-# Function to remove duplicate accounts
+# Remove duplicate accounts
 def remove_duplicates(update: Update, context: CallbackContext) -> None:
     global combo_data
     if combo_data:
         # Remove duplicates using a set
         cleaned_combo = list(set(combo_data))
 
-        # Save the cleaned data
+        # Save cleaned combo to file
         with open("removed_duplicates.txt", "w") as f:
             f.write("\n".join(cleaned_combo))
 
@@ -96,7 +103,7 @@ def remove_duplicates(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text("Please upload a combo file first.")
 
-# Main function to run the bot
+# Main function to start the bot
 def main() -> None:
     # Set your Telegram Bot Token
     updater = Updater("8188996092:AAH0UMcil8hmj8Aw_x-hWkEy5SoXvMhnsPQ", use_context=True)
@@ -104,17 +111,19 @@ def main() -> None:
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    # Command handlers
+    # Command handler for /start
     dp.add_handler(CommandHandler("start", start))
+
+    # Handle uploaded combo files
     dp.add_handler(MessageHandler(Filters.document, handle_file))
     
-    # Handle button clicks (Inline keyboard)
+    # Handle button clicks
     dp.add_handler(CallbackQueryHandler(button_click))
 
-    # Start the Bot
+    # Start the bot
     updater.start_polling()
 
-    # Run the bot until you press Ctrl-C
+    # Run the bot until you press Ctrl+C
     updater.idle()
 
 if __name__ == '__main__':
